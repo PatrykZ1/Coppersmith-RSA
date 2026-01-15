@@ -149,16 +149,14 @@ def build_f_poly(M0: int, e: int, C: int):
 
 def polys_for_coppersmith(f: List[int], N: int, s: int, t: int):
     polys: List[List[int]] = []
-    f_pows = [[1]]
-    for i in range(1, s + 1):
-        f_pows.append(poly_mul(f_pows[-1], f))
+    fi = [1]
     for i in range(0, s + 1):
-        fi = f_pows[i] if i < len(f_pows) else poly_pow(f, i)
         Ni = pow(N, s - i)
         scaled_fi = poly_scalar_mul(fi, Ni)
         for j in range(0, t + 1):
             p = poly_shift(scaled_fi, j)
             polys.append(p)
+        fi = poly_mul(fi, f)
     return polys
 
 def poly_to_scaled_vector(p: List[int], X: int, max_deg: int):
