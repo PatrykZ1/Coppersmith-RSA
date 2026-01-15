@@ -24,8 +24,8 @@ def poly_sub(a: List[int], b: List[int]):
         ai = a[i] if i < len(a) else 0
         bi = b[i] if i < len(b) else 0
         res[i] = ai - bi
-    while len(res) > 1 and res[-1] == 0:
-        res.pop()
+    # while len(res) > 1 and res[-1] == 0:
+    #     res.pop()
     return res
 
 def poly_scalar_mul(a: List[int], k: int):
@@ -122,12 +122,12 @@ def lll_reduce(mat: List[List[int]], delta: float = 0.75):
     k = 1
     while k < n:
         for j in range(k - 1, -1, -1):
-            q = int(round(mu[k][j]))
-            if q != 0:
-                B[k] = [int(B[k][i] - q * B[j][i]) for i in range(m)]
+            if abs(mu[k][j]) > 0.5:
+                q = int(round(mu[k][j]))
+                B[k] = poly_sub(B[k], poly_scalar_mul(B[j], q))
                 Bf[k] = [float(B[k][i]) for i in range(m)]
                 mu, norm_sq = gram_schmidt(Bf)
-        if norm_sq[k] >= (delta - mu[k][k - 1] * mu[k][k - 1]) * norm_sq[k - 1]:
+        if norm_sq[k] > (delta - mu[k][k - 1] * mu[k][k - 1]) * norm_sq[k - 1]:
             k += 1
         else:
             B[k], B[k - 1] = B[k - 1], B[k]
