@@ -5,6 +5,13 @@ import sys
 import gmpy2
 from gmpy2 import mpz
 
+def poly_fix_degree(a: List[int]):
+    while len(a) > 1 and a[-1] == 0:
+        a.pop()
+    return a
+
+def polys_fix_degree(polys: List[List[int]]):
+    return [poly_fix_degree(p) for p in polys]
 
 def poly_add(a: List[int], b: List[int]):
     n = max(len(a), len(b))
@@ -13,8 +20,6 @@ def poly_add(a: List[int], b: List[int]):
         ai = a[i] if i < len(a) else 0
         bi = b[i] if i < len(b) else 0
         res[i] = ai + bi
-    while len(res) > 1 and res[-1] == 0:
-        res.pop()
     return res
 
 def poly_sub(a: List[int], b: List[int]):
@@ -24,8 +29,6 @@ def poly_sub(a: List[int], b: List[int]):
         ai = a[i] if i < len(a) else 0
         bi = b[i] if i < len(b) else 0
         res[i] = ai - bi
-    # while len(res) > 1 and res[-1] == 0:
-    #     res.pop()
     return res
 
 def poly_scalar_mul(a: List[int], k: int):
@@ -42,8 +45,6 @@ def poly_mul(a: List[int], b: List[int]):
             continue
         for j, bj in enumerate(b):
             res[i + j] += ai * bj
-    while len(res) > 1 and res[-1] == 0:
-        res.pop()
     return res
 
 def poly_pow(a: List[int], e: int):
@@ -197,6 +198,7 @@ def coppersmith_univariate(N: int, e: int, C: int, M0: int, s: int = 2, t: int =
     f = build_f_poly(M0, e, C)
     X = int(math.floor(N ** (1.0 / e))) + 1
     polys = polys_for_coppersmith(f, N, s, t)
+    polys = polys_fix_degree(polys)
     mat = build_lattice_matrix(polys, X)
     reduced = lll_reduce(mat, delta=delta)
     def len_sq(v: List[int]):
