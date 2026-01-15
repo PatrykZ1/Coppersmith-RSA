@@ -167,7 +167,7 @@ def poly_to_scaled_vector(p: List[int], X: int, max_deg: int):
     return vec
 
 def build_lattice_matrix(polys: List[List[int]], X: int):
-    degs = [len(p) - 1 for p in polys]
+    degs = [poly_degree(p) for p in polys]
     max_deg = max(degs) if degs else 0
     mat = []
     for p in polys:
