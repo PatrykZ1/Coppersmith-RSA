@@ -163,5 +163,23 @@ def demo_small():
     else:
         print("Nie znaleziono x (prawdopodobnie poza boundem)")
 
+def decrypt(N, e, C, M0):
+    x = coppersmith_univariate(N, e, C, M0, s=2, t=4, delta=0.99)
+    return x
+
+def open_file_and_decrypt(filename):
+    data = {}
+    with open(filename, 'r') as f:
+        data = json.load()
+    if not 'M' in data or not 'e' in data or not 'C' in data or not 'M0' in data:
+        print('File does not contain proper data.')
+    M = data['M']
+    e = data['e']
+    C = data['C']
+    M0 = data['M0']
+    print(f'M{M}\ne{e}\nC{C}\nM0{M0}')
+
 if __name__ == "__main__":
-    demo_small()
+    f1 = 'encrypted1.txt'
+    open_file_and_decrypt(f1)
+    #demo_small()
