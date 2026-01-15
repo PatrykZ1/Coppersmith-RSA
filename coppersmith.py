@@ -127,7 +127,7 @@ def lll_reduce(mat: List[List[int]], delta: float = 0.75):
                 B[k] = poly_sub(B[k], poly_scalar_mul(B[j], q))
                 Bf[k] = [float(B[k][i]) for i in range(m)]
                 mu, norm_sq = gram_schmidt(Bf)
-        if norm_sq[k] > (delta - mu[k][k - 1] * mu[k][k - 1]) * norm_sq[k - 1]:
+        if norm_sq[k] >= (delta - mu[k][k - 1] * mu[k][k - 1]) * norm_sq[k - 1]:
             k += 1
         else:
             B[k], B[k - 1] = B[k - 1], B[k]
