@@ -181,8 +181,7 @@ def vector_to_poly(vec: List[int], X: int):
         denom = pow(X, k)
         ak = int(v // denom) if denom != 0 else 0
         a.append(ak)
-    while len(a) > 1 and a[-1] == 0:
-        a.pop()
+    a = poly_fix_degree(a)
     return a
 
 def find_integer_roots_bruteforce(poly: List[int], bound: int):
