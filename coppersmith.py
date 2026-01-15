@@ -5,7 +5,7 @@ import math
 from gmpy2 import mpz
 import gmpy2
 import random
-
+import json
 from poly import *
 
 def int_root(n: int, k: int):
@@ -170,16 +170,17 @@ def decrypt(N, e, C, M0):
 def open_file_and_decrypt(filename):
     data = {}
     with open(filename, 'r') as f:
-        data = json.load()
-    if not 'M' in data or not 'e' in data or not 'C' in data or not 'M0' in data:
+        data = json.load(f)
+    if not 'N' in data or not 'e' in data or not 'C' in data or not 'M0' in data:
         print('File does not contain proper data.')
-    M = data['M']
+        return 
+    N = data['N']
     e = data['e']
     C = data['C']
     M0 = data['M0']
-    print(f'M{M}\ne{e}\nC{C}\nM0{M0}')
+    print(f'N{N}\ne{e}\nC{C}\nM0{M0}')
 
 if __name__ == "__main__":
     f1 = 'encrypted1.txt'
     open_file_and_decrypt(f1)
-    #demo_small()
+    demo_small()
