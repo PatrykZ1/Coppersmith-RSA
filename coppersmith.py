@@ -178,9 +178,10 @@ def open_file_and_decrypt(filename):
     e = data['e']
     C = data['C']
     M0 = data['M0']
-    print(f'N{N}\ne{e}\nC{C}\nM0{M0}')
+    x = decrypt(N, e, C, M0)
+    M = M0 + x
+    print(f'Given message prefix: {M0}\nRecovered message suffx: {x}\nComplete message: {M}')
 
 if __name__ == "__main__":
     f1 = 'encrypted1.txt'
     open_file_and_decrypt(f1)
-    demo_small()
