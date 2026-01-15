@@ -1,37 +1,77 @@
-# coppersmith_with_own_lll.py
-# Edukacyjna implementacja ataku Coppersmitha (jednowymiarowy mały pierwiastek)
-# z autonomiczną implementacją LLL (dokładna arytmetyka przez Fraction).
-#
-# Uwaga: kod jest przeznaczony do eksperymentów edukacyjnych na małych liczbach.
-# Dla dużych N (np. 1024/2048-bit) konieczne są zoptymalizowane biblioteki (fpylll/Sage).
-#
-# Wymagane: sympy
-# Opcjonalne (przyspieszenie/duża arytmetyka): gmpy2
-#
-# Python >= 3.8
-
 from __future__ import annotations
-from fractions import Fraction
 from typing import List, Tuple, Optional
 import math
 import sys
+import gmpy2
+from gmpy2 import mpz
 
-try:
-    import sympy as sp
-except Exception:
-    raise ImportError("sympy required: pip install sympy")
 
-try:
-    import gmpy2
-    from gmpy2 import mpz
-except Exception:
-    gmpy2 = None
-    mpz = int
+def poly_add(a: List[int], b: List[int]) -> List[int]:
+    n = max(len(a), len(b))
+    res = [0] * n
+    for i in range(n):
+        ai = a[i] if i < len(a) else 0
+        bi = b[i] if i < len(b) else 0
+        res[i] = ai + bi
+    while len(res) > 1 and res[-1] == 0:
+        res.pop()
+    return res
 
-# ---------------------------
-# Pomocnicze funkcje arytmetyczne
-# ---------------------------
-def int_root(n: int, k: int):
+def poly_sub(a: List[int], b: List[int]) -> List[int]:
+    n = max(len(a), len(b))
+    res = [0] * n
+    for i in range(n):
+        ai = a[i] if i < len(a) else 0
+        bi = b[i] if i < len(b) else 0
+        res[i] = ai - bi
+    while len(res) > 1 and res[-1] == 0:
+        res.pop()
+    return res
+
+def poly_scalar_mul(a: List[int], k: int) -> List[int]:
+    if k == 0:
+        return [0]
+    return [int(ai * k) for ai in a]
+
+def poly_mul(a: List[int], b: List[int]) -> List[int]:
+    if not a or not b:
+        return [0]
+    res = [0] * (len(a) + len(b) - 1)
+    for i, ai in enumerate(a):
+        if ai == 0:
+            continue
+        for j, bj in enumerate(b):
+            res[i + j] += ai * bj
+    while len(res) > 1 and res[-1] == 0:
+        res.pop()
+    return res
+
+def poly_pow(a: List[int], e: int) -> List[int]:
+    res = [1]
+    base = a[:]
+    while e > 0:
+        if e & 1:
+            res = poly_mul(res, base)
+        base = poly_mul(base, base)
+        e >>= 1
+    return res
+
+def poly_shift(a: List[int], s: int) -> List[int]:
+    if a == [0]:
+        return [0]
+    return ([0] * s) + a[:]
+
+def poly_degree(a: List[int]) -> int:
+    return len(a) - 1
+
+def poly_eval(a: List[int], x: int) -> int:
+    # Horner
+    res = 0
+    for coeff in reversed(a):
+        res = res * x + coeff
+    return res
+
+def int_root(n: int, k: int) -> Tuple[int, bool]:
     if gmpy2:
         r, exact = gmpy2.iroot(mpz(n), k)
         return int(r), bool(exact)
@@ -43,225 +83,158 @@ def int_root(n: int, k: int):
             r -= 1
         return r, (r ** k == n)
 
-def inner_product(a: List[int], b: List[int]) -> int:
-    return sum(int(x) * int(y) for x, y in zip(a, b))
+def vec_dot_float(a: List[float], b: List[float]) -> float:
+    s = 0.0
+    for x, y in zip(a, b):
+        s += x * y
+    return s
 
-def vector_sub(a: List[int], b: List[int], scale: int = 1):
-    return [int(x - scale * y) for x, y in zip(a, b)]
+def vec_len_sq_float(a: List[float]) -> float:
+    s = 0.0
+    for x in a:
+        s += x * x
+    return s
 
-def vector_add(a: List[int], b: List[int], scale: int = 1):
-    return [int(x + scale * y) for x, y in zip(a, b)]
-
-# ---------------------------
-# Dokładna implementacja Gram-Schmidt (Fraction)
-# ---------------------------
-def gram_schmidt_exact(basis: List[List[int]]):
-    """
-    Dla zadanej listy wektorów bazowych (wiersze macierzy) zwraca:
-      B_star: listę ortogonalnych wektorów (Fraction),
-      mu: macierz współczynników mu[i][j] = <b_i, b*_j> / <b*_j, b*_j>,
-      Bstar_norm_sq: listę norm kwadratów ||b*_i||^2 jako Fraction.
-    Wszystkie obliczenia w Fraction -> pełna dokładność racjonalna.
-    """
-    n = len(basis)
+# Gram-Schmidt and LLL
+def gram_schmidt_float(B: List[List[float]]) -> Tuple[List[List[float]], List[List[float]], List[float]]:
+    n = len(B)
     if n == 0:
         return [], [], []
-    m = len(basis[0])
-    Bstar: List[List[Fraction]] = [[Fraction(0) for _ in range(m)] for _ in range(n)]
-    mu: List[List[Fraction]] = [[Fraction(0) for _ in range(n)] for _ in range(n)]
-    norm_sq: List[Fraction] = [Fraction(0) for _ in range(n)]
-
+    m = len(B[0])
+    Bstar = [[0.0] * m for _ in range(n)]
+    mu = [[0.0] * n for _ in range(n)]
+    norm_sq = [0.0] * n
     for i in range(n):
-        # v = b_i as Fraction vector
-        v = [Fraction(int(x)) for x in basis[i]]
+        v = B[i][:]
         for j in range(i):
-            # mu[i][j] = <b_i, b*_j> / ||b*_j||^2
-            num = sum(vk * bk for vk, bk in zip(v, Bstar[j]))
             denom = norm_sq[j]
-            if denom == 0:
-                mu_ij = Fraction(0)
+            if denom == 0.0:
+                muij = 0.0
             else:
-                mu_ij = Fraction(num, denom)
-            mu[i][j] = mu_ij
-            # v = v - mu_ij * b*_j
-            v = [vi - mu_ij * bj for vi, bj in zip(v, Bstar[j])]
+                muij = vec_dot_float(v, Bstar[j]) / denom
+            mu[i][j] = muij
+            for t in range(m):
+                v[t] -= muij * Bstar[j][t]
         Bstar[i] = v
-        norm_sq[i] = sum(x * x for x in v)
+        norm_sq[i] = vec_len_sq_float(Bstar[i])
     return Bstar, mu, norm_sq
 
-# ---------------------------
-# Implementacja LLL (dokładna / oparta na Fraction)
-# ---------------------------
-def lll_reduce_exact(basis: List[List[int]], delta: Fraction = Fraction(3, 4)):
-    """
-    Pełna implementacja algorytmu LLL z dokładną arytmetyką.
-    delta (Fraction) powinien należeć do (1/4, 1)
-    Zwrot: zredukowana baza (lista wektorów int).
-    """
-    n = len(basis)
+def lll_reduce_float(mat: List[List[int]], delta: float = 0.75) -> List[List[int]]:
+    B = [list(map(int, row))[:] for row in mat]
+    n = len(B)
     if n == 0:
         return []
-    # Kopia bazy (będziemy ją modyfikować)
-    B = [list(map(int, row))[:] for row in basis]
-
-    # Główna pętla
+    m = len(B[0])
+    Bf = [list(float(x) for x in row) for row in B]
+    Bstar, mu, norm_sq = gram_schmidt_float(Bf)
     k = 1
-    Bstar, mu, norm_sq = gram_schmidt_exact(B)
-    # Przechodzimy aż k == n
     while k < n:
-        # Size reduction: dla j = k-1..0
         for j in range(k - 1, -1, -1):
-            # round mu[k][j] do najbliższej liczby całkowitej
-            m = mu[k][j]
-            # round m (Fraction) to nearest int
-            if m >= 0:
-                q = int(m + Fraction(1, 2))
-            else:
-                q = int(m - Fraction(1, 2))
+            q = int(round(mu[k][j]))
             if q != 0:
-                # b_k = b_k - q * b_j
-                B[k] = vector_sub(B[k], B[j], q)
-                # recompute GS for row k (najprościej cała GS)
-                Bstar, mu, norm_sq = gram_schmidt_exact(B)
-        # Lovasz condition:
-        left = norm_sq[k]
-        # compute mu[k][k-1]^2
-        mu_k_k1 = mu[k][k - 1]
-        right = (delta - mu_k_k1 * mu_k_k1) * norm_sq[k - 1]
-        if left >= right:
+                B[k] = [int(B[k][i] - q * B[j][i]) for i in range(m)]
+                Bf[k] = [float(B[k][i]) for i in range(m)]
+                Bstar, mu, norm_sq = gram_schmidt_float(Bf)
+        if norm_sq[k] >= (delta - mu[k][k - 1] * mu[k][k - 1]) * norm_sq[k - 1]:
             k += 1
         else:
-            # swap b_k and b_{k-1}
             B[k], B[k - 1] = B[k - 1], B[k]
-            # recompute GS
-            Bstar, mu, norm_sq = gram_schmidt_exact(B)
+            Bf[k], Bf[k - 1] = Bf[k - 1], Bf[k]
+            Bstar, mu, norm_sq = gram_schmidt_float(Bf)
             k = max(k - 1, 1)
     return B
 
-# ---------------------------
-# Narzędzia: wielomiany / macierz kratowa
-# ---------------------------
-def build_f(M0: int, e: int, C: int):
-    x = sp.symbols('x')
-    return sp.Poly(sp.expand((M0 + x) ** e - C), x)
+def build_f_poly(M0: int, e: int, C: int) -> List[int]:
+    # f(x) = (M0 + x)^e - C
+    coefs = [0] * (e + 1)
+    for k in range(e + 1):
+        binom = math.comb(e, k)
+        coefs[k] = binom * pow(M0, e - k)
+    coefs[0] -= C
+    while len(coefs) > 1 and coefs[-1] == 0:
+        coefs.pop()
+    return coefs
 
-def polys_for_coppersmith(f: sp.Poly, N: int, s: int, t: int):
-    x = f.gen
-    polys: List[sp.Poly] = []
-    # klasyczna konstrukcja p_{i,j} = x^j * f(x)^i * N^{s-i}
+def polys_for_coppersmith(f: List[int], N: int, s: int, t: int) -> List[List[int]]:
+    polys: List[List[int]] = []
+    f_pows = [[1]]
+    for i in range(1, s + 1):
+        f_pows.append(poly_mul(f_pows[-1], f))
     for i in range(0, s + 1):
-        fi = sp.expand(f.as_expr() ** i)
+        fi = f_pows[i] if i < len(f_pows) else poly_pow(f, i)
         Ni = pow(N, s - i)
+        scaled_fi = poly_scalar_mul(fi, Ni)
         for j in range(0, t + 1):
-            expr = (x ** j) * fi * Ni
-            polys.append(sp.Poly(sp.expand(expr), x))
+            p = poly_shift(scaled_fi, j)
+            polys.append(p)
     return polys
 
-def poly_to_scaled_vector(p: sp.Poly, X: int, max_deg: int):
-    x = p.gen
-    # podstawienie x -> x * X
-    expr = sp.expand(p.as_expr().subs(x, x * X))
-    # wyznacz współczynniki 0..max_deg
-    coeffs = [0] * (max_deg + 1)
-    poly_expr = sp.Poly(expr, x)
-    for i in range(0, max_deg + 1):
-        c = poly_expr.coeff_monomial(x ** i)
-        coeffs[i] = int(sp.expand(c))
-    return coeffs
+def poly_to_scaled_vector(p: List[int], X: int, max_deg: int) -> List[int]:
+    vec = [0] * (max_deg + 1)
+    for k, a_k in enumerate(p):
+        if k <= max_deg:
+            vec[k] = int(a_k * pow(X, k))
+    return vec
 
-def build_lattice_matrix(polys: List[sp.Poly], X: int):
-    degs = [p.degree() for p in polys]
+def build_lattice_matrix(polys: List[List[int]], X: int) -> Tuple[List[List[int]], int]:
+    degs = [len(p) - 1 for p in polys]
     max_deg = max(degs) if degs else 0
-    mat: List[List[int]] = []
+    mat = []
     for p in polys:
         mat.append(poly_to_scaled_vector(p, X, max_deg))
     return mat, max_deg
 
-def vector_to_poly(vec: List[int], X: int, x_symbol=None) -> sp.Poly:
-    if x_symbol is None:
-        x_symbol = sp.symbols('x')
-    expr = 0
+def vector_to_poly(vec: List[int], X: int) -> List[int]:
+    a = []
     for k, v in enumerate(vec):
-        # oryginalny współczynnik a_k = v // X^k (integer division)
         denom = pow(X, k)
-        if denom == 0:
-            a_k = 0
-        else:
-            a_k = int(v // denom)
-        expr += a_k * (x_symbol ** k)
-    return sp.Poly(sp.expand(expr), x_symbol)
+        ak = int(v // denom) if denom != 0 else 0
+        a.append(ak)
+    while len(a) > 1 and a[-1] == 0:
+        a.pop()
+    return a
 
-# ---------------------------
-# Szukanie pierwiastków i weryfikacja
-# ---------------------------
-def find_integer_roots(poly: sp.Poly, bound: int):
-    roots: List[int] = []
-    if poly.degree() == 0:
-        return roots
-    # spróbuj numerycznych korzeni i filtracji do intów
-    try:
-        approx_roots = [complex(r) for r in sp.nroots(poly.as_expr())]
-        for ar in approx_roots:
-            if abs(ar.imag) < 1e-8:
-                r_real = ar.real
-                r_int = int(round(r_real))
-                if abs(r_real - r_int) < 1e-6 and abs(r_int) < bound:
-                    if poly.eval(r_int) == 0:
-                        roots.append(r_int)
-    except Exception:
-        pass
-    # dodatkowy bruteforce dla małych wartości
+def find_integer_roots_bruteforce(poly: List[int], bound: int) -> List[int]:
+    roots = []
     brute = min(bound, 2000)
     for cand in range(-brute, brute + 1):
-        if poly.eval(cand) == 0:
+        if poly_eval(poly, cand) == 0:
             roots.append(cand)
-    # unikatowe
-    return list(set(roots))
+    return roots
 
-# ---------------------------
-# Główna funkcja ataku
-# ---------------------------
-def coppersmith_univariate(N: int, e: int, C: int, M0: int,
-                           s: int = 2, t: int = 5, delta: float = 0.75):
-    x = sp.symbols('x')
-    f = build_f(M0, e, C)
-    # typowy bound X
+# main attack function
+def coppersmith_univariate(N: int, e: int, C: int, M0: int, s: int = 2, t: int = 5, delta: float = 0.75) -> Optional[int]:
+    f = build_f_poly(M0, e, C)
     X = int(math.floor(N ** (1.0 / e))) + 1
     polys = polys_for_coppersmith(f, N, s, t)
     mat, max_deg = build_lattice_matrix(polys, X)
-    # uruchom LLL (dokładna implementacja)
-    # macierz powinna mieć wiersze jako wektory współczynników
-    reduced = lll_reduce_exact(mat, Fraction(delta).limit_denominator())
-    # sprawdź kilka najkrótszych wektorów (sortowanie po euklidesowej długości)
-    def vec_len_sq(v):
-        return sum(int(x) * int(x) for x in v)
-    reduced_sorted = sorted(reduced, key=vec_len_sq)
+    reduced = lll_reduce_float(mat, delta=delta)
+    def len_sq(v: List[int]) -> int:
+        s = 0
+        for x in v:
+            s += int(x) * int(x)
+        return s
+    reduced_sorted = sorted(reduced, key=len_sq)
     for vec in reduced_sorted[:min(10, len(reduced_sorted))]:
-        g = vector_to_poly(vec, X, x)
-        # uprość g
-        g = sp.Poly(sp.expand(g.as_expr()), x)
-        roots = find_integer_roots(g, X)
+        g = vector_to_poly(vec, X)
+        roots = find_integer_roots_bruteforce(g, X)
         for r in roots:
             if abs(r) < X:
-                val = int(sp.Mod(f.eval(r), N))
-                if val == 0:
+                if poly_eval(f, r) % N == 0:
                     return r
     return None
 
-# ---------------------------
-# Demo (mały przykład)
-# ---------------------------
 def demo_small():
-    p, q = 2137, 21372157
+    p, q = 101, 113
     N = p * q
     e = 3
-    M0 = 100*128 # znany prefiks
-    x_true = 42
+    M0 = 0x414141
+    x_true = 12
     M = M0 + x_true
     C = pow(M, e, N)
-    print("N =", N, "e =", e)
-    print("M0 =", M0, "x_true =", x_true, "M =", M, "C =", C)
-    x_found = coppersmith_univariate(N, e, C, M0, s=2, t=4, delta=0.75)
+    print("N =", N, " e =", e)
+    print("M0 =", M0, " x_true =", x_true, " M =", M, " C =", C)
+    x_found = coppersmith_univariate(N, e, C, M0, s=2, t=4, delta=0.99)
     print("x_found:", x_found)
     if x_found is not None:
         print("Recovered M:", M0 + x_found)
