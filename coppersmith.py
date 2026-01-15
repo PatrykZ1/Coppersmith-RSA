@@ -31,7 +31,7 @@ except Exception:
 # ---------------------------
 # Pomocnicze funkcje arytmetyczne
 # ---------------------------
-def int_root(n: int, k: int) -> Tuple[int, bool]:
+def int_root(n: int, k: int):
     if gmpy2:
         r, exact = gmpy2.iroot(mpz(n), k)
         return int(r), bool(exact)
@@ -46,16 +46,16 @@ def int_root(n: int, k: int) -> Tuple[int, bool]:
 def inner_product(a: List[int], b: List[int]) -> int:
     return sum(int(x) * int(y) for x, y in zip(a, b))
 
-def vector_sub(a: List[int], b: List[int], scale: int = 1) -> List[int]:
+def vector_sub(a: List[int], b: List[int], scale: int = 1):
     return [int(x - scale * y) for x, y in zip(a, b)]
 
-def vector_add(a: List[int], b: List[int], scale: int = 1) -> List[int]:
+def vector_add(a: List[int], b: List[int], scale: int = 1):
     return [int(x + scale * y) for x, y in zip(a, b)]
 
 # ---------------------------
 # Dokładna implementacja Gram-Schmidt (Fraction)
 # ---------------------------
-def gram_schmidt_exact(basis: List[List[int]]) -> Tuple[List[List[Fraction]], List[List[Fraction]], List[Fraction]]:
+def gram_schmidt_exact(basis: List[List[int]]):
     """
     Dla zadanej listy wektorów bazowych (wiersze macierzy) zwraca:
       B_star: listę ortogonalnych wektorów (Fraction),
@@ -92,7 +92,7 @@ def gram_schmidt_exact(basis: List[List[int]]) -> Tuple[List[List[Fraction]], Li
 # ---------------------------
 # Implementacja LLL (dokładna / oparta na Fraction)
 # ---------------------------
-def lll_reduce_exact(basis: List[List[int]], delta: Fraction = Fraction(3, 4)) -> List[List[int]]:
+def lll_reduce_exact(basis: List[List[int]], delta: Fraction = Fraction(3, 4)):
     """
     Pełna implementacja algorytmu LLL z dokładną arytmetyką.
     delta (Fraction) powinien należeć do (1/4, 1)
@@ -141,11 +141,11 @@ def lll_reduce_exact(basis: List[List[int]], delta: Fraction = Fraction(3, 4)) -
 # ---------------------------
 # Narzędzia: wielomiany / macierz kratowa
 # ---------------------------
-def build_f(M0: int, e: int, C: int) -> sp.Poly:
+def build_f(M0: int, e: int, C: int):
     x = sp.symbols('x')
     return sp.Poly(sp.expand((M0 + x) ** e - C), x)
 
-def polys_for_coppersmith(f: sp.Poly, N: int, s: int, t: int) -> List[sp.Poly]:
+def polys_for_coppersmith(f: sp.Poly, N: int, s: int, t: int):
     x = f.gen
     polys: List[sp.Poly] = []
     # klasyczna konstrukcja p_{i,j} = x^j * f(x)^i * N^{s-i}
@@ -157,7 +157,7 @@ def polys_for_coppersmith(f: sp.Poly, N: int, s: int, t: int) -> List[sp.Poly]:
             polys.append(sp.Poly(sp.expand(expr), x))
     return polys
 
-def poly_to_scaled_vector(p: sp.Poly, X: int, max_deg: int) -> List[int]:
+def poly_to_scaled_vector(p: sp.Poly, X: int, max_deg: int):
     x = p.gen
     # podstawienie x -> x * X
     expr = sp.expand(p.as_expr().subs(x, x * X))
@@ -169,7 +169,7 @@ def poly_to_scaled_vector(p: sp.Poly, X: int, max_deg: int) -> List[int]:
         coeffs[i] = int(sp.expand(c))
     return coeffs
 
-def build_lattice_matrix(polys: List[sp.Poly], X: int) -> Tuple[List[List[int]], int]:
+def build_lattice_matrix(polys: List[sp.Poly], X: int):
     degs = [p.degree() for p in polys]
     max_deg = max(degs) if degs else 0
     mat: List[List[int]] = []
@@ -194,7 +194,7 @@ def vector_to_poly(vec: List[int], X: int, x_symbol=None) -> sp.Poly:
 # ---------------------------
 # Szukanie pierwiastków i weryfikacja
 # ---------------------------
-def find_integer_roots(poly: sp.Poly, bound: int) -> List[int]:
+def find_integer_roots(poly: sp.Poly, bound: int):
     roots: List[int] = []
     if poly.degree() == 0:
         return roots
@@ -222,7 +222,7 @@ def find_integer_roots(poly: sp.Poly, bound: int) -> List[int]:
 # Główna funkcja ataku
 # ---------------------------
 def coppersmith_univariate(N: int, e: int, C: int, M0: int,
-                           s: int = 2, t: int = 5, delta: float = 0.75) -> Optional[int]:
+                           s: int = 2, t: int = 5, delta: float = 0.75):
     x = sp.symbols('x')
     f = build_f(M0, e, C)
     # typowy bound X
