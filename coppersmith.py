@@ -72,31 +72,23 @@ def poly_eval(a: List[int], x: int):
     return res
 
 def int_root(n: int, k: int):
-    if gmpy2:
-        r, exact = gmpy2.iroot(mpz(n), k)
-        return int(r), bool(exact)
-    else:
-        r = int(n ** (1.0 / k))
-        while (r + 1) ** k <= n:
-            r += 1
-        while r ** k > n:
-            r -= 1
-        return r, (r ** k == n)
+    r, exact = gmpy2.iroot(mpz(n), k)
+    return int(r), bool(exact)
 
-def vec_dot_float(a: List[float], b: List[float]):
+def vec_dot(a: List[float], b: List[float]):
     s = 0.0
     for x, y in zip(a, b):
         s += x * y
     return s
 
-def vec_len_sq_float(a: List[float]):
+def vec_len_sq(a: List[float]):
     s = 0.0
     for x in a:
         s += x * x
     return s
 
 # Gram-Schmidt and LLL
-def gram_schmidt_float(B: List[List[float]]):
+def gram_schmidt(B: List[List[float]]):
     n = len(B)
     if n == 0:
         return [], [], []
@@ -111,22 +103,22 @@ def gram_schmidt_float(B: List[List[float]]):
             if denom == 0.0:
                 muij = 0.0
             else:
-                muij = vec_dot_float(v, Bstar[j]) / denom
+                muij = vec_dot(v, Bstar[j]) / denom
             mu[i][j] = muij
             for t in range(m):
                 v[t] -= muij * Bstar[j][t]
         Bstar[i] = v
-        norm_sq[i] = vec_len_sq_float(Bstar[i])
-    return Bstar, mu, norm_sq
+        norm_sq[i] = vec_len_sq(Bstar[i])
+    return mu, norm_sq
 
-def lll_reduce_float(mat: List[List[int]], delta: float = 0.75):
+def lll_reduce(mat: List[List[int]], delta: float = 0.75):
     B = [list(map(int, row))[:] for row in mat]
     n = len(B)
     if n == 0:
         return []
     m = len(B[0])
     Bf = [list(float(x) for x in row) for row in B]
-    Bstar, mu, norm_sq = gram_schmidt_float(Bf)
+    mu, norm_sq = gram_schmidt(Bf)
     k = 1
     while k < n:
         for j in range(k - 1, -1, -1):
@@ -134,13 +126,13 @@ def lll_reduce_float(mat: List[List[int]], delta: float = 0.75):
             if q != 0:
                 B[k] = [int(B[k][i] - q * B[j][i]) for i in range(m)]
                 Bf[k] = [float(B[k][i]) for i in range(m)]
-                Bstar, mu, norm_sq = gram_schmidt_float(Bf)
+                mu, norm_sq = gram_schmidt(Bf)
         if norm_sq[k] >= (delta - mu[k][k - 1] * mu[k][k - 1]) * norm_sq[k - 1]:
             k += 1
         else:
             B[k], B[k - 1] = B[k - 1], B[k]
             Bf[k], Bf[k - 1] = Bf[k - 1], Bf[k]
-            Bstar, mu, norm_sq = gram_schmidt_float(Bf)
+            mu, norm_sq = gram_schmidt(Bf)
             k = max(k - 1, 1)
     return B
 
@@ -182,7 +174,7 @@ def build_lattice_matrix(polys: List[List[int]], X: int):
     mat = []
     for p in polys:
         mat.append(poly_to_scaled_vector(p, X, max_deg))
-    return mat, max_deg
+    return mat
 
 def vector_to_poly(vec: List[int], X: int):
     a = []
@@ -207,8 +199,8 @@ def coppersmith_univariate(N: int, e: int, C: int, M0: int, s: int = 2, t: int =
     f = build_f_poly(M0, e, C)
     X = int(math.floor(N ** (1.0 / e))) + 1
     polys = polys_for_coppersmith(f, N, s, t)
-    mat, max_deg = build_lattice_matrix(polys, X)
-    reduced = lll_reduce_float(mat, delta=delta)
+    mat = build_lattice_matrix(polys, X)
+    reduced = lll_reduce(mat, delta=delta)
     def len_sq(v: List[int]):
         s = 0
         for x in v:
