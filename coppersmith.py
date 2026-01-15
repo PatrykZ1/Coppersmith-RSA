@@ -6,7 +6,7 @@ import gmpy2
 from gmpy2 import mpz
 
 
-def poly_add(a: List[int], b: List[int]) -> List[int]:
+def poly_add(a: List[int], b: List[int]):
     n = max(len(a), len(b))
     res = [0] * n
     for i in range(n):
@@ -17,7 +17,7 @@ def poly_add(a: List[int], b: List[int]) -> List[int]:
         res.pop()
     return res
 
-def poly_sub(a: List[int], b: List[int]) -> List[int]:
+def poly_sub(a: List[int], b: List[int]):
     n = max(len(a), len(b))
     res = [0] * n
     for i in range(n):
@@ -28,12 +28,12 @@ def poly_sub(a: List[int], b: List[int]) -> List[int]:
         res.pop()
     return res
 
-def poly_scalar_mul(a: List[int], k: int) -> List[int]:
+def poly_scalar_mul(a: List[int], k: int):
     if k == 0:
         return [0]
     return [int(ai * k) for ai in a]
 
-def poly_mul(a: List[int], b: List[int]) -> List[int]:
+def poly_mul(a: List[int], b: List[int]):
     if not a or not b:
         return [0]
     res = [0] * (len(a) + len(b) - 1)
@@ -46,7 +46,7 @@ def poly_mul(a: List[int], b: List[int]) -> List[int]:
         res.pop()
     return res
 
-def poly_pow(a: List[int], e: int) -> List[int]:
+def poly_pow(a: List[int], e: int):
     res = [1]
     base = a[:]
     while e > 0:
@@ -56,22 +56,22 @@ def poly_pow(a: List[int], e: int) -> List[int]:
         e >>= 1
     return res
 
-def poly_shift(a: List[int], s: int) -> List[int]:
+def poly_shift(a: List[int], s: int):
     if a == [0]:
         return [0]
     return ([0] * s) + a[:]
 
-def poly_degree(a: List[int]) -> int:
+def poly_degree(a: List[int]):
     return len(a) - 1
 
-def poly_eval(a: List[int], x: int) -> int:
+def poly_eval(a: List[int], x: int):
     # Horner
     res = 0
     for coeff in reversed(a):
         res = res * x + coeff
     return res
 
-def int_root(n: int, k: int) -> Tuple[int, bool]:
+def int_root(n: int, k: int):
     if gmpy2:
         r, exact = gmpy2.iroot(mpz(n), k)
         return int(r), bool(exact)
@@ -83,20 +83,20 @@ def int_root(n: int, k: int) -> Tuple[int, bool]:
             r -= 1
         return r, (r ** k == n)
 
-def vec_dot_float(a: List[float], b: List[float]) -> float:
+def vec_dot_float(a: List[float], b: List[float]):
     s = 0.0
     for x, y in zip(a, b):
         s += x * y
     return s
 
-def vec_len_sq_float(a: List[float]) -> float:
+def vec_len_sq_float(a: List[float]):
     s = 0.0
     for x in a:
         s += x * x
     return s
 
 # Gram-Schmidt and LLL
-def gram_schmidt_float(B: List[List[float]]) -> Tuple[List[List[float]], List[List[float]], List[float]]:
+def gram_schmidt_float(B: List[List[float]]):
     n = len(B)
     if n == 0:
         return [], [], []
@@ -119,7 +119,7 @@ def gram_schmidt_float(B: List[List[float]]) -> Tuple[List[List[float]], List[Li
         norm_sq[i] = vec_len_sq_float(Bstar[i])
     return Bstar, mu, norm_sq
 
-def lll_reduce_float(mat: List[List[int]], delta: float = 0.75) -> List[List[int]]:
+def lll_reduce_float(mat: List[List[int]], delta: float = 0.75):
     B = [list(map(int, row))[:] for row in mat]
     n = len(B)
     if n == 0:
@@ -144,7 +144,7 @@ def lll_reduce_float(mat: List[List[int]], delta: float = 0.75) -> List[List[int
             k = max(k - 1, 1)
     return B
 
-def build_f_poly(M0: int, e: int, C: int) -> List[int]:
+def build_f_poly(M0: int, e: int, C: int):
     # f(x) = (M0 + x)^e - C
     coefs = [0] * (e + 1)
     for k in range(e + 1):
@@ -155,7 +155,7 @@ def build_f_poly(M0: int, e: int, C: int) -> List[int]:
         coefs.pop()
     return coefs
 
-def polys_for_coppersmith(f: List[int], N: int, s: int, t: int) -> List[List[int]]:
+def polys_for_coppersmith(f: List[int], N: int, s: int, t: int):
     polys: List[List[int]] = []
     f_pows = [[1]]
     for i in range(1, s + 1):
@@ -169,14 +169,14 @@ def polys_for_coppersmith(f: List[int], N: int, s: int, t: int) -> List[List[int
             polys.append(p)
     return polys
 
-def poly_to_scaled_vector(p: List[int], X: int, max_deg: int) -> List[int]:
+def poly_to_scaled_vector(p: List[int], X: int, max_deg: int):
     vec = [0] * (max_deg + 1)
     for k, a_k in enumerate(p):
         if k <= max_deg:
             vec[k] = int(a_k * pow(X, k))
     return vec
 
-def build_lattice_matrix(polys: List[List[int]], X: int) -> Tuple[List[List[int]], int]:
+def build_lattice_matrix(polys: List[List[int]], X: int):
     degs = [len(p) - 1 for p in polys]
     max_deg = max(degs) if degs else 0
     mat = []
@@ -184,7 +184,7 @@ def build_lattice_matrix(polys: List[List[int]], X: int) -> Tuple[List[List[int]
         mat.append(poly_to_scaled_vector(p, X, max_deg))
     return mat, max_deg
 
-def vector_to_poly(vec: List[int], X: int) -> List[int]:
+def vector_to_poly(vec: List[int], X: int):
     a = []
     for k, v in enumerate(vec):
         denom = pow(X, k)
@@ -194,7 +194,7 @@ def vector_to_poly(vec: List[int], X: int) -> List[int]:
         a.pop()
     return a
 
-def find_integer_roots_bruteforce(poly: List[int], bound: int) -> List[int]:
+def find_integer_roots_bruteforce(poly: List[int], bound: int):
     roots = []
     brute = min(bound, 2000)
     for cand in range(-brute, brute + 1):
@@ -203,13 +203,13 @@ def find_integer_roots_bruteforce(poly: List[int], bound: int) -> List[int]:
     return roots
 
 # main attack function
-def coppersmith_univariate(N: int, e: int, C: int, M0: int, s: int = 2, t: int = 5, delta: float = 0.75) -> Optional[int]:
+def coppersmith_univariate(N: int, e: int, C: int, M0: int, s: int = 2, t: int = 5, delta: float = 0.75):
     f = build_f_poly(M0, e, C)
     X = int(math.floor(N ** (1.0 / e))) + 1
     polys = polys_for_coppersmith(f, N, s, t)
     mat, max_deg = build_lattice_matrix(polys, X)
     reduced = lll_reduce_float(mat, delta=delta)
-    def len_sq(v: List[int]) -> int:
+    def len_sq(v: List[int]):
         s = 0
         for x in v:
             s += int(x) * int(x)
@@ -225,11 +225,11 @@ def coppersmith_univariate(N: int, e: int, C: int, M0: int, s: int = 2, t: int =
     return None
 
 def demo_small():
-    p, q = 101, 113
+    p, q = 2137, 21372157
     N = p * q
     e = 3
-    M0 = 0x414141
-    x_true = 12
+    M0 = 0xdeadbeef
+    x_true = 42
     M = M0 + x_true
     C = pow(M, e, N)
     print("N =", N, " e =", e)
