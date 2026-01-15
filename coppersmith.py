@@ -1,76 +1,12 @@
-from __future__ import annotations
-from typing import List, Tuple, Optional
+#!/usr/bin/env python
+
+from typing import List
 import math
-import sys
-import gmpy2
 from gmpy2 import mpz
+import gmpy2
+import random
 
-def poly_fix_degree(a: List[int]):
-    while len(a) > 1 and a[-1] == 0:
-        a.pop()
-    return a
-
-def polys_fix_degree(polys: List[List[int]]):
-    return [poly_fix_degree(p) for p in polys]
-
-def poly_add(a: List[int], b: List[int]):
-    n = max(len(a), len(b))
-    res = [0] * n
-    for i in range(n):
-        ai = a[i] if i < len(a) else 0
-        bi = b[i] if i < len(b) else 0
-        res[i] = ai + bi
-    return res
-
-def poly_sub(a: List[int], b: List[int]):
-    n = max(len(a), len(b))
-    res = [0] * n
-    for i in range(n):
-        ai = a[i] if i < len(a) else 0
-        bi = b[i] if i < len(b) else 0
-        res[i] = ai - bi
-    return res
-
-def poly_scalar_mul(a: List[int], k: int):
-    if k == 0:
-        return [0]
-    return [int(ai * k) for ai in a]
-
-def poly_mul(a: List[int], b: List[int]):
-    if not a or not b:
-        return [0]
-    res = [0] * (len(a) + len(b) - 1)
-    for i, ai in enumerate(a):
-        if ai == 0:
-            continue
-        for j, bj in enumerate(b):
-            res[i + j] += ai * bj
-    return res
-
-def poly_pow(a: List[int], e: int):
-    res = [1]
-    base = a[:]
-    while e > 0:
-        if e & 1:
-            res = poly_mul(res, base)
-        base = poly_mul(base, base)
-        e >>= 1
-    return res
-
-def poly_shift(a: List[int], s: int):
-    if a == [0]:
-        return [0]
-    return ([0] * s) + a[:]
-
-def poly_degree(a: List[int]):
-    return len(a) - 1
-
-def poly_eval(a: List[int], x: int):
-    # Horner
-    res = 0
-    for coeff in reversed(a):
-        res = res * x + coeff
-    return res
+from poly import *
 
 def int_root(n: int, k: int):
     r, exact = gmpy2.iroot(mpz(n), k)
@@ -125,7 +61,7 @@ def lll_reduce(mat: List[List[int]], delta: float = 0.75):
         for j in range(k - 1, -1, -1):
             if abs(mu[k][j]) > 0.5:
                 q = int(round(mu[k][j]))
-                B[k] = poly_sub(B[k], poly_scalar_mul(B[j], q))
+                B[k] = [B[k][i] - q * B[j][i] for i in range(m)]
                 Bf[k] = [float(B[k][i]) for i in range(m)]
                 mu, norm_sq = gram_schmidt(Bf)
         if norm_sq[k] >= (delta - mu[k][k - 1] * mu[k][k - 1]) * norm_sq[k - 1]:
@@ -137,38 +73,31 @@ def lll_reduce(mat: List[List[int]], delta: float = 0.75):
             k = max(k - 1, 1)
     return B
 
-def build_f_poly(M0: int, e: int, C: int):
-    # f(x) = (M0 + x)^e - C
-    coefs = [0] * (e + 1)
-    for k in range(e + 1):
-        binom = math.comb(e, k)
-        coefs[k] = binom * pow(M0, e - k)
-    coefs[0] -= C
-    while len(coefs) > 1 and coefs[-1] == 0:
-        coefs.pop()
-    return coefs
+def build_f_poly(M0: int, e: int, C: int) -> Poly:
+    f = Poly([M0, 1]) ** e
+    f = f - Poly([C])
+    return f
 
-def polys_for_coppersmith(f: List[int], N: int, s: int, t: int):
-    polys: List[List[int]] = []
-    fi = [1]
-    for i in range(0, s + 1):
+def polys_for_coppersmith(f: Poly, N: int, s: int, t: int):
+    polys = []
+    fi = Poly([1])
+    for i in range(s + 1):
         Ni = pow(N, s - i)
-        scaled_fi = poly_scalar_mul(fi, Ni)
-        for j in range(0, t + 1):
-            p = poly_shift(scaled_fi, j)
-            polys.append(p)
-        fi = poly_mul(fi, f)
+        scaled_fi = fi * Ni
+        for j in range(t + 1):
+            polys.append(scaled_fi.shift(j))
+        fi = fi * f
     return polys
 
-def poly_to_scaled_vector(p: List[int], X: int, max_deg: int):
+def poly_to_scaled_vector(p: Poly, X: int, max_deg: int):
     vec = [0] * (max_deg + 1)
-    for k, a_k in enumerate(p):
+    for k, a in enumerate(p.coefficients):
         if k <= max_deg:
-            vec[k] = int(a_k * pow(X, k))
+            vec[k] = int(a * pow(X, k))
     return vec
 
 def build_lattice_matrix(polys: List[List[int]], X: int):
-    degs = [poly_degree(p) for p in polys]
+    degs = [p.degree for p in polys]
     max_deg = max(degs) if degs else 0
     mat = []
     for p in polys:
@@ -176,28 +105,22 @@ def build_lattice_matrix(polys: List[List[int]], X: int):
     return mat
 
 def vector_to_poly(vec: List[int], X: int):
-    a = []
+    coeffs = []
     for k, v in enumerate(vec):
-        denom = pow(X, k)
-        ak = int(v // denom) if denom != 0 else 0
-        a.append(ak)
-    a = poly_fix_degree(a)
-    return a
+        coeffs.append(v // pow(X, k))
+    return Poly(coeffs)
 
-def find_integer_roots_bruteforce(poly: List[int], bound: int):
+def find_integer_roots_bruteforce(poly: Poly, bound: int):
     roots = []
-    brute = min(bound, 2000)
-    for cand in range(-brute, brute + 1):
-        if poly_eval(poly, cand) == 0:
-            roots.append(cand)
+    for x in range(-min(bound, 2000), min(bound, 2000) + 1):
+        if poly(x) == 0:
+            roots.append(x)
     return roots
 
-# main attack function
 def coppersmith_univariate(N: int, e: int, C: int, M0: int, s: int = 2, t: int = 5, delta: float = 0.75):
     f = build_f_poly(M0, e, C)
     X = int(math.floor(N ** (1.0 / e))) + 1
     polys = polys_for_coppersmith(f, N, s, t)
-    polys = polys_fix_degree(polys)
     mat = build_lattice_matrix(polys, X)
     reduced = lll_reduce(mat, delta=delta)
     def len_sq(v: List[int]):
@@ -211,9 +134,17 @@ def coppersmith_univariate(N: int, e: int, C: int, M0: int, s: int = 2, t: int =
         roots = find_integer_roots_bruteforce(g, X)
         for r in roots:
             if abs(r) < X:
-                if poly_eval(f, r) % N == 0:
+                if f(r) % N == 0:
                     return r
     return None
+
+def gen_rsa_manual(bits=256, e=3):
+    assert bits % 2 == 0
+    while True:
+        p = gmpy2.next_prime(random.getrandbits(bits // 2))
+        q = gmpy2.next_prime(random.getrandbits(bits // 2))
+        if p != q and gmpy2.gcd((p - 1)*(q - 1), e) == 1:
+            return int(p * q), int(p), int(q)
 
 def demo_small():
     p, q = 2137, 21372157
