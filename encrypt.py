@@ -11,7 +11,7 @@ def encrypt(m, filename):
     m_suffix = m - m_prefix
     C = pow(m, e, N)
     with open(filename, 'w') as f:
-        data = {'N': N, 'e': e, 'C': C, 'M0': m_prefix}
+        data = {'N': N, 'e': e, 'C': C, 'M0': m_prefix, 'M1': m_suffix}
         json.dump(data, f)
 
 filename = 'encrypted1.txt'

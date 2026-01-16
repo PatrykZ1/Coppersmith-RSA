@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 
-from typing import List
-import math
-from gmpy2 import mpz
+from typing import List, Callable
+from gmpy2 import mpz, mpfr
 import gmpy2
 import random
 import json
 from poly import *
+
+gmpy2.get_context().precision = 2048
 
 def int_root(n: int, k: int):
     r, exact = gmpy2.iroot(mpz(n), k)
@@ -25,53 +26,52 @@ def vec_len_sq(a: List[float]):
     return s
 
 # Gram-Schmidt and LLL
-def gram_schmidt(B: List[List[float]]):
+def gram_schmidt(B: List[List[mpz]]):
     n = len(B)
     if n == 0:
         return [], [], []
     m = len(B[0])
-    Bstar = [[0.0] * m for _ in range(n)]
-    mu = [[0.0] * n for _ in range(n)]
-    norm_sq = [0.0] * n
+    Bstar = [[mpfr(0)] * m for _ in range(n)]
+    mu = [[mpfr(0)] * n for _ in range(n)]
+    norm_sq = [mpfr(0)] * n
     for i in range(n):
-        v = B[i][:]
+        v = [mpfr(x) for x in B[i]]
         for j in range(i):
             denom = norm_sq[j]
-            if denom == 0.0:
-                muij = 0.0
+            if denom == 0:
+                muij = mpfr(0)
             else:
-                muij = vec_dot(v, Bstar[j]) / denom
+                dot_prod = sum(v[t] * Bstar[j][t] for t in range(m))
+                muij = dot_prod / denom
             mu[i][j] = muij
             for t in range(m):
                 v[t] -= muij * Bstar[j][t]
         Bstar[i] = v
-        norm_sq[i] = vec_len_sq(Bstar[i])
+        norm_sq[i] = sum(x * x for x in v)
     return mu, norm_sq
 
 def lll_reduce(mat: List[List[int]], delta: float = 0.75):
-    B = [list(map(int, row))[:] for row in mat]
+    B = [[mpz(x) for x in row] for row in mat]
     n = len(B)
     if n == 0:
         return []
-    m = len(B[0])
-    Bf = [list(float(x) for x in row) for row in B]
-    mu, norm_sq = gram_schmidt(Bf)
+    mu, norm_sq = gram_schmidt(B)
     k = 1
+    delta_mpfr = mpfr(delta)
     while k < n:
         for j in range(k - 1, -1, -1):
             if abs(mu[k][j]) > 0.5:
-                q = int(round(mu[k][j]))
-                B[k] = [B[k][i] - q * B[j][i] for i in range(m)]
-                Bf[k] = [float(B[k][i]) for i in range(m)]
-                mu, norm_sq = gram_schmidt(Bf)
-        if norm_sq[k] >= (delta - mu[k][k - 1] * mu[k][k - 1]) * norm_sq[k - 1]:
+                q = mpz(gmpy2.rint(mu[k][j]))
+                for i in range(len(B[k])):
+                    B[k][i] -= q * B[j][i]
+                mu, norm_sq = gram_schmidt(B)
+        if norm_sq[k] >= (delta_mpfr - mu[k][k - 1] ** 2) * norm_sq[k - 1]:
             k += 1
         else:
             B[k], B[k - 1] = B[k - 1], B[k]
-            Bf[k], Bf[k - 1] = Bf[k - 1], Bf[k]
-            mu, norm_sq = gram_schmidt(Bf)
+            mu, norm_sq = gram_schmidt(B)
             k = max(k - 1, 1)
-    return B
+    return [[int(x) for x in row] for row in B]
 
 def build_f_poly(M0: int, e: int, C: int) -> Poly:
     f = Poly([M0, 1]) ** e
@@ -107,19 +107,20 @@ def build_lattice_matrix(polys: List[List[int]], X: int):
 def vector_to_poly(vec: List[int], X: int):
     coeffs = []
     for k, v in enumerate(vec):
-        coeffs.append(v // pow(X, k))
+        c, rem = gmpy2.f_divmod(mpz(v), mpz(X) ** k)
+        coeffs.append(c)
     return Poly(coeffs)
 
-def find_integer_roots_bruteforce(poly: Poly, bound: int):
-    roots = []
-    for x in range(-min(bound, 2000), min(bound, 2000) + 1):
-        if poly(x) == 0:
-            roots.append(x)
-    return roots
+def find_correct_integer_root(poly: Poly, bound: int, test_func: Callable[[int], bool]):
+    for x in range(-min(bound, int(1e7)), min(bound, int(1e7)) + 1):
+        if poly(x) == 0 and test_func(x):
+            return x
+    return None
 
 def coppersmith_univariate(N: int, e: int, C: int, M0: int, s: int = 2, t: int = 5, delta: float = 0.75):
     f = build_f_poly(M0, e, C)
-    X = int(math.floor(N ** (1.0 / e))) + 1
+    X, _ = gmpy2.iroot(mpz(N), e)
+    X = int(X) + 1
     polys = polys_for_coppersmith(f, N, s, t)
     mat = build_lattice_matrix(polys, X)
     reduced = lll_reduce(mat, delta=delta)
@@ -131,11 +132,9 @@ def coppersmith_univariate(N: int, e: int, C: int, M0: int, s: int = 2, t: int =
     reduced_sorted = sorted(reduced, key=len_sq)
     for vec in reduced_sorted[:min(10, len(reduced_sorted))]:
         g = vector_to_poly(vec, X)
-        roots = find_integer_roots_bruteforce(g, X)
-        for r in roots:
-            if abs(r) < X:
-                if f(r) % N == 0:
-                    return r
+        root = find_correct_integer_root(g, X, lambda r: (f(r) % N) == 0)
+        if root is not None:
+            return root
     return None
 
 def gen_rsa_manual(bits=256, e=3):
@@ -180,7 +179,7 @@ def open_file_and_decrypt(filename):
     M0 = data['M0']
     x = decrypt(N, e, C, M0)
     M = M0 + x
-    print(f'Given message prefix: {M0}\nRecovered message suffx: {x}\nComplete message: {M}')
+    print(f'Given message prefix: {M0}\nRecovered message suffix: {x}\nComplete message: {M}')
 
 if __name__ == "__main__":
     f1 = 'encrypted1.txt'
